@@ -6,7 +6,7 @@ indicadores (perguntas), regras de linguagem do especialista, planos de
 contas e lancamentos financeiros
 """
 
-from __feature__ import annotations
+from __future__ import annotations
 from dataclasses import dataclass, field
 
 @dataclass
