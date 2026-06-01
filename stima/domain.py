@@ -63,7 +63,7 @@ class PlanoDeContas:
     Distribuicao percentual recomendada de renda por categoria
     """
 
-    pefil: str
+    perfil: str
     distribuicao: dict[str, float]  # categoria -> % (soma ~100)
 
     def valores(self, renda: float) -> dict[str, float]:

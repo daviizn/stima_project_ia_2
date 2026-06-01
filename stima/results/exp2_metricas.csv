@@ -1,0 +1,3 @@
+metodo,acuracia,precisao,revocacao,f1,tempo_ms_por_inferencia
+Regras (especialista),1.0000,1.0000,1.0000,1.0000,0.0132
+Naive Bayes (dados),0.8783,0.9401,0.6438,0.7400,0.0078

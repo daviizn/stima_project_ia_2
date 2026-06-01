@@ -2,4 +2,4 @@ cenario,metodo,acuracia,precisao,revocacao,f1
 Limpo,Apriori (projeto),0.9541,0.9546,0.9599,0.9554
 Limpo,Baseline (palavra-chave),0.9083,0.9237,0.9237,0.9123
 Ruidoso,Apriori (projeto),0.9450,0.9437,0.9488,0.9449
-Ruidoso,Baseline (palavra-chave),0.7431,0.8203,0.7224,0.7290
+Ruidoso,Baseline (palavra-chave),0.9083,0.9237,0.9237,0.9123

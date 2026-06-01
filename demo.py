@@ -1,114 +1,126 @@
-"""Demonstracao do STIMA - parte de Mineracao (Apriori).
+"""Demonstracao ponta-a-ponta do STIMA.
 
-Esta demo usa apenas os modulos atualmente disponiveis no projeto:
+Simula a jornada completa, com TODA comunicacao passando pelo Mediador
+(coordenacao centralizada):
 
-    domain.py, mediator.py, mining.py, protocol.py, seed_data.py
-
-Os agentes Especialista, Tutor e Estudante (que viriam de stima.agents)
-ainda nao foram implementados pelos colegas, portanto esta demo cobre
-a fatia que JA ESTA pronta: o pipeline do agente de Mineracao/Recomendacao
-(Financial Tracker), com toda a comunicacao passando pelo Mediador (StimaEF).
-
-Fluxo demonstrado:
-
-  0. Inicializacao do Mediador.
-  1. Treinamento do ClassificadorApriori com SMS sinteticos rotulados.
-  2. Registro do agente FinancialTracker no Mediador.
-  3. Autenticacao do usuario e obtencao de token.
-  4. Envio de SMS bancarios via Mediador; o Tracker classifica e devolve
-     uma Transacao (categoria + confianca).
-  5. Exibicao das regras de associacao aprendidas pelo Apriori.
-  6. Trilha de auditoria do Mediador.
+  1. Especialista cadastra perfis, indicadores, planos e regras.
+  2. Estudante autentica-se e responde os indicadores.
+  3. Tutor infere o perfil e gera o plano de contas personalizado.
+  4. Financial Tracker minera SMS bancarios e classifica os gastos (Apriori).
+  5. Estudante solicita auxilio ao Tutor.
 
 Execucao:  python demo.py
 """
-from __future__ import annotations
-
-import re
-
 from stima import seed_data
-from stima.domain import Transacao
+from stima.agents import FinancialTracker, StimaEstud, StimaExpert, StimaTutor
 from stima.mediator import Mediador
 from stima.mining import ClassificadorApriori
 from stima.protocol import Mensagem
 
 LINHA = "=" * 66
-PREFIXO_CAT = "CAT:"  # prefixo usado pelo Apriori para distinguir categorias
 
 
 def banner(titulo: str) -> None:
     print(f"\n{LINHA}\n  {titulo}\n{LINHA}")
 
 
-# ---------------------------------------------------------------------------
-# Agente minimo de Mineracao (inline)
-# ---------------------------------------------------------------------------
-# Stub do Financial Tracker definido aqui dentro porque o modulo stima.agents
-# ainda nao existe. Ele cumpre o contrato esperado pelo Mediador: ter um .id
-# e um metodo .receber(msg, mediador). Quando o agente "oficial" estiver
-# pronto, este stub pode ser removido e a importacao trocada.
-# ---------------------------------------------------------------------------
-class FinancialTracker:
-    """Agente de mineracao: classifica SMS bancarios em categorias de gasto."""
-
-    def __init__(self, identificador: str, classificador: ClassificadorApriori):
-        self.id = identificador
-        self._clf = classificador
-
-    def receber(self, msg: Mensagem, mediador: Mediador) -> dict:
-        if msg.acao == "classificar_sms":
-            sms = msg.payload["sms"]
-            categoria, confianca = self._clf.classificar(sms)
-            transacao = Transacao(
-                descricao=sms,
-                valor=_extrair_valor(sms),
-                categoria=categoria,
-                fonte="sms",
-                confianca=confianca,
-            )
-            return {"transacao": transacao}
-        raise ValueError(f"Acao desconhecida para FinancialTracker: {msg.acao}")
-
-
-def _extrair_valor(sms: str) -> float:
-    """Tenta extrair o valor monetario do SMS (R$ 1.234,56 -> 1234.56)."""
-    m = re.search(r"R\$\s*([\d.]+,\d{2})", sms)
-    if not m:
-        return 0.0
-    return float(m.group(1).replace(".", "").replace(",", "."))
-
-
-# ---------------------------------------------------------------------------
 def main() -> None:
     # ----------------------------------------------------------------- 0
-    banner("0. Inicializacao do Mediador (StimaEF) e do classificador")
+    banner("0. Inicializacao do sistema e do Mediador (StimaEF)")
     mediador = Mediador()
     mediador.cadastrar_credencial("aluno01", "1234")
 
-    # Treina o classificador do Tracker com SMS sinteticos rotulados.
+    # Treina o classificador do Tracker com SMS sinteticos.
     clf = ClassificadorApriori(min_support=0.02, min_confidence=0.3)
-    dados_sms = seed_data.gerar_sms_dataset()
-    print(f"Dataset de treino: {len(dados_sms)} SMS sinteticos rotulados.")
-    clf.treinar(dados_sms)
-    print(f"Regras de associacao aprendidas: {len(clf._regras)}")
+    clf.treinar(seed_data.gerar_sms_dataset())
+
+    especialista = StimaExpert("StimaExpert")
+    tutor = StimaTutor("StimaTutor")
+    estudante = StimaEstud("StimaEstud", usuario="aluno01")
+    tracker = FinancialTracker("FinancialTracker", clf)
+    for ag in (especialista, tutor, estudante, tracker):
+        mediador.registrar_agente(ag)
+    print("Agentes registrados:", ", ".join(mediador._agentes))
+
+    token_admin = mediador.autenticar("aluno01", "1234")
 
     # ----------------------------------------------------------------- 1
-    banner("1. Registro do agente FinancialTracker no Mediador")
-    tracker = FinancialTracker("FinancialTracker", clf)
-    mediador.registrar_agente(tracker)
-    print(f"Agentes registrados: {', '.join(mediador._agentes)}")
+    banner("1. Especialista cadastra o conhecimento do dominio")
+    for pid, nome, desc in seed_data.PERFIS:
+        mediador.enviar(Mensagem("admin", "StimaExpert", "cadastrar_perfil",
+                                 {"id": pid, "nome": nome, "descricao": desc},
+                                 token=token_admin))
+    for iid, perg, opcoes in seed_data.INDICADORES:
+        mediador.enviar(Mensagem("admin", "StimaExpert", "cadastrar_indicador",
+                                 {"id": iid, "pergunta": perg, "opcoes": opcoes},
+                                 token=token_admin))
+    for perfil, dist in seed_data.PLANOS.items():
+        mediador.enviar(Mensagem("admin", "StimaExpert", "cadastrar_plano",
+                                 {"perfil": perfil, "distribuicao": dist},
+                                 token=token_admin))
+    print(f"Perfis: {len(mediador.banco['perfis'])} | "
+          f"Indicadores: {len(mediador.banco['indicadores'])} | "
+          f"Planos: {len(mediador.banco['planos'])}")
+
+    print("\nValidando e cadastrando regras (analisador lexico/sintatico):")
+    ok = err = 0
+    for texto in seed_data.REGRAS:
+        r = mediador.enviar(Mensagem("admin", "StimaExpert", "cadastrar_regra",
+                                     {"texto": texto}, token=token_admin))
+        ok += int(r["ok"])
+        err += int(not r["ok"])
+    print(f"  {ok} regras validas cadastradas, {err} rejeitadas.")
+
+    ruim = mediador.enviar(Mensagem(
+        "admin", "StimaExpert", "cadastrar_regra",
+        {"texto": 'SE renda == "muito_alta" ENTAO rico PESO 1'}, token=token_admin))
+    print(f"  Exemplo de regra invalida -> rejeitada pelo analisador:")
+    print(f"    {ruim['erro']}")
 
     # ----------------------------------------------------------------- 2
-    banner("2. Autenticacao do usuario")
+    banner("2. Estudante autentica-se e responde os indicadores")
     token = mediador.autenticar("aluno01", "1234")
-    print(f"Token de sessao obtido: {token}")
+    print(f"Token de sessao do estudante: {token}")
 
-    # Tentativa com credencial errada (para demonstrar o controle de acesso).
-    fail = mediador.autenticar("aluno01", "senha_errada")
-    print(f"Tentativa com senha errada -> token={fail} (negado pelo Mediador)")
+    respostas_usuario = {
+        "comprometimento_renda": "acima_50",
+        "reserva_emergencia": "nenhuma",
+        "pagamento_fatura": "minimo",
+        "atraso_contas": "as_vezes",
+        "poupanca_mensal": "nao",
+        "uso_rotativo": "frequentemente",
+        "emprestimos_ativos": "dois",
+    }
+    for ind, val in respostas_usuario.items():
+        mediador.enviar(Mensagem("StimaEstud", "StimaEstud", "registrar_resposta",
+                                 {"indicador": ind, "valor": val}, token=token))
+    print(f"Respostas registradas: {len(estudante.respostas)}/"
+          f"{len(mediador.banco['indicadores'])}")
 
     # ----------------------------------------------------------------- 3
-    banner("3. Classificacao automatica de SMS via Mediador")
+    banner("3. Tutor infere o perfil e gera o plano de contas")
+    resultado = mediador.enviar(Mensagem("StimaEstud", "StimaTutor",
+                                         "inferir_perfil",
+                                         {"respostas": estudante.respostas},
+                                         token=token))
+    print("Afinidade por perfil:")
+    for p, a in sorted(resultado["afinidade"].items(), key=lambda x: -x[1]):
+        nome = mediador.banco["perfis"][p].nome
+        print(f"  {nome:<24} {a:6.1%}  {'#' * int(a * 40)}")
+    perfil = resultado["perfil"]
+    print(f"\n>> Perfil atribuido: {mediador.banco['perfis'][perfil].nome}")
+    print(f"   Regras disparadas: {len(resultado['regras_disparadas'])}")
+
+    renda = 4000.0
+    plano = mediador.enviar(Mensagem("StimaEstud", "StimaTutor", "gerar_plano",
+                                     {"perfil": perfil, "renda": renda},
+                                     token=token))
+    print(f"\nPlano de contas personalizado (renda R$ {renda:.2f}):")
+    for cat, val in plano["valores"].items():
+        print(f"  {cat:<12} {plano['distribuicao'][cat]:>3.0f}%   R$ {val:>8.2f}")
+
+    # ----------------------------------------------------------------- 4
+    banner("4. Financial Tracker minera SMS e classifica gastos (Apriori)")
     sms_exemplos = [
         "CARTAO Compra aprovada R$ 187,90 EXTRA SUPERMERCADO",
         "Compra aprovada R$ 62,00 em POSTO IPIRANGA",
@@ -117,59 +129,40 @@ def main() -> None:
         "Voce fez uma compra de R$ 54,90 no IFOOD PEDIDO",
         "Debito R$ 350,00 CEB ENERGIA",
     ]
-    print(f"{'Categoria':<14}{'Conf.':>6}{'Valor':>11}   SMS")
+    print(f"{'Categoria':<14}{'Conf.':>6}   SMS")
     print("-" * 66)
-    transacoes: list[Transacao] = []
     for sms in sms_exemplos:
-        resposta = mediador.enviar(Mensagem(
-            origem="usuario",
-            destino="FinancialTracker",
-            acao="classificar_sms",
-            payload={"sms": sms},
-            token=token,
-        ))
-        t = resposta["transacao"]
-        transacoes.append(t)
-        print(f"{t.categoria:<14}{t.confianca:>5.0%} R$ {t.valor:>7.2f}   {sms[:36]}")
-
-    print(f"\nLancamentos classificados: {len(transacoes)}")
-
-    # Tentativa de envio com token invalido (controle de acesso).
-    print("\nTentativa com token invalido:")
-    try:
+        r = mediador.enviar(Mensagem("FinancialTracker", "FinancialTracker",
+                                     "classificar_sms", {"sms": sms}, token=token))
+        t = r["transacao"]
         mediador.enviar(Mensagem(
-            origem="usuario",
-            destino="FinancialTracker",
-            acao="classificar_sms",
-            payload={"sms": "qualquer coisa"},
-            token="token_falso",
-        ))
-    except PermissionError as exc:
-        print(f"  Mediador negou o roteamento -> {exc}")
+            "StimaEstud", "StimaEstud", "registrar_lancamento",
+            {"descricao": t.descricao, "valor": t.valor, "categoria": t.categoria,
+             "fonte": "sms", "confianca": t.confianca}, token=token))
+        print(f"{t.categoria:<14}{t.confianca:>5.0%}   {sms[:42]}")
+    print(f"\nLancamentos automaticos registrados: {len(estudante.lancamentos)}")
 
-    # ----------------------------------------------------------------- 4
-    banner("4. Regras de associacao aprendidas pelo Apriori")
-    # O atributo _regras e um DataFrame ja ordenado por confianca decrescente
-    # (mining.py faz a ordenacao no final do .treinar()).
-    if clf._regras.empty:
-        print("Nenhuma regra aprendida (verifique min_support/min_confidence).")
-    else:
-        print(f"{'Antecedente':<24}{'Categoria':<14}{'Conf.':>7}{'Sup.':>8}")
-        print("-" * 53)
-        for _, linha in clf._regras.head(10).iterrows():
-            antecedente = sorted(
-                item for item in linha["antecedents"]
-                if not item.startswith(PREFIXO_CAT)
-            )
-            ante_str = ", ".join(antecedente) if antecedente else "-"
-            categoria = next(iter(linha["consequents"])).replace(PREFIXO_CAT, "")
-            print(f"{ante_str[:23]:<24}{categoria:<14}"
-                  f"{linha['confidence']:>6.2f} {linha['support']:>7.3f}")
+    # mostra algumas regras de associacao aprendidas (le _regras direto)
+    if not clf._regras.empty:
+        print("\nExemplos de regras de associacao aprendidas (Apriori):")
+        for _, row in clf._regras.head(6).iterrows():
+            antecedente = ", ".join(sorted(
+                i for i in row["antecedents"] if not i.startswith("CAT:")
+            ))
+            categoria = next(iter(row["consequents"])).replace("CAT:", "")
+            print(f"  {antecedente:<18} -> {categoria:<12} "
+                  f"(conf={row['confidence']:.2f}, sup={row['support']:.3f})")
+
+    # ----------------------------------------------------------------- 5
+    banner("5. Estudante solicita auxilio ao Tutor")
+    aux = mediador.enviar(Mensagem("StimaEstud", "StimaTutor", "responder_auxilio",
+                                   {"perfil": perfil}, token=token))
+    print(f"Tutor: {aux['resposta']}")
 
     # ----------------------------------------------------------------- log
     banner("Trilha de auditoria do Mediador (ultimas 8 mensagens)")
-    for entrada in mediador.log[-8:]:
-        print(" ", entrada)
+    for linha in mediador.log[-8:]:
+        print(" ", linha)
 
 
 if __name__ == "__main__":

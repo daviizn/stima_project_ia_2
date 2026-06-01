@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from .domain import Indicador, Perfil, PlanoDeContas, Transacao
-from .mining import ClassificadorApriori, extrair_valor
+from .mining import ClassificadorApriori
 from .protocol import Mensagem
 from .rule_dsl import ErroLexico, ErroSemantico, ErroSintatico, compilar_regra
 from .rule_engine import MotorDeRegras
@@ -140,12 +140,12 @@ class FinancialTracker(Agente):
         if msg.acao == "classificar_sms":
             sms = msg.payload["sms"]
             categoria, confianca = self.classificador.classificar(sms)
-            valor = extrair_valor(sms)
+            valor = None
             t = Transacao(
                 descricao=sms,
                 valor=valor or 0.0,
                 categoria=categoria,
-                fonte="sms"
+                fonte="sms",
                 confianca=confianca
             )
             return {"ok": True, "transacao": t}
