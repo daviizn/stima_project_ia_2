@@ -99,7 +99,7 @@ PLANOS = {
 
 _ESTABELECIMENTOS = {
     "alimentacao": ["EXTRA SUPERMERCADO", "PAO DE ACUCAR", "ASSAI ATACADISTA",
-                    "CARREFOUR HIPER", "HORTIFRUTI CENTRAL", "PADARIA BELA"],
+                    "CARREFOUR HIPER", "HORTIFRUTI CENTRAL", "PADARIA BELA", "RESTAURANTE OUTBACK", "BAR DO ZE"],
     "transporte": ["POSTO IPIRANGA", "POSTO SHELL", "UBER VIAGENS",
                    "APP99 CORRIDA", "ESTACIONAMENTO ROTA"],
     "saude": ["DROGASIL", "DROGARIA PACHECO", "FARMACIA POPULAR",
@@ -107,7 +107,7 @@ _ESTABELECIMENTOS = {
     "moradia": ["CEB ENERGIA", "CAESB AGUA", "CLARO INTERNET",
                 "ALUGUEL IMOVEL", "CONDOMINIO EDIFICIO"],
     "lazer": ["IFOOD PEDIDO", "CINEMARK INGRESSO", "NETFLIX MENSAL",
-              "SPOTIFY PREMIUM", "RESTAURANTE OUTBACK"],
+              "SPOTIFY PREMIUM", "RESTAURANTE OUTBACK", "BAR DO ZE"],
     "dividas": ["PARCELA EMPRESTIMO", "FATURA CARTAO", "FINANCIAMENTO VEICULO",
                 "CREDITO PESSOAL", "ACORDO RENEGOCIACAO"],
 }
@@ -134,5 +134,5 @@ def gerar_sms_dataset(n_por_categoria: int = 60, seed: int = 42):
             valor = f"{rng.uniform(10, 1500):.2f}".replace(".", ",")
             template = rng.choice(_TEMPLATES)
             dados.append((template.format(valor=valor, estab=estab), categoria))
-        rng.shuffle(dados)
-        return dados
+    rng.shuffle(dados)
+    return dados
