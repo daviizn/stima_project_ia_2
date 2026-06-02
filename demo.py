@@ -31,7 +31,7 @@ def main() -> None:
     mediador.cadastrar_credencial("aluno01", "1234")
 
     # Treina o classificador do Tracker com SMS sinteticos.
-    clf = ClassificadorApriori(min_support=0.02, min_confidence=0.3)
+    clf = ClassificadorApriori(suporte_min=0.02, confianca_min=0.3)
     clf.treinar(seed_data.gerar_sms_dataset())
 
     especialista = StimaExpert("StimaExpert")
@@ -143,15 +143,13 @@ def main() -> None:
     print(f"\nLancamentos automaticos registrados: {len(estudante.lancamentos)}")
 
     # mostra algumas regras de associacao aprendidas (le _regras direto)
-    if not clf._regras.empty:
+    top = clf.top_regras(6)
+    if not top.empty:
         print("\nExemplos de regras de associacao aprendidas (Apriori):")
-        for _, row in clf._regras.head(6).iterrows():
-            antecedente = ", ".join(sorted(
-                i for i in row["antecedents"] if not i.startswith("CAT:")
-            ))
-            categoria = next(iter(row["consequents"])).replace("CAT:", "")
-            print(f"  {antecedente:<18} -> {categoria:<12} "
+        for _, row in top.iterrows():
+            print(f"  {row['antecedente']:<18} -> {row['categoria']:<12} "
                   f"(conf={row['confidence']:.2f}, sup={row['support']:.3f})")
+
 
     # ----------------------------------------------------------------- 5
     banner("5. Estudante solicita auxilio ao Tutor")
